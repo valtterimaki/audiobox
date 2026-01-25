@@ -5,14 +5,18 @@
 #include <SerialFlash.h>
 
 // GUItool: begin automatically generated code
-AudioPlaySdWav           playSdWav1;     //xy=664,523
-AudioPlaySdWav           playSdWav2;     //xy=666,580
-AudioMixer4              mixer1;         //xy=922,560
-AudioOutputI2S           i2s1;           //xy=1182,560
+AudioPlaySdWav           playSdWav1;
+AudioPlaySdWav           playSdWav2;
+AudioPlaySdWav           playSdWav3;
+AudioPlaySdWav           playSdWav4;
+AudioMixer4              mixer1;
+AudioOutputI2S           i2s1;
 AudioConnection          patchCord1(playSdWav1, 0, mixer1, 0);
 AudioConnection          patchCord2(playSdWav2, 0, mixer1, 1);
-AudioConnection          patchCord3(mixer1, 0, i2s1, 0);
-AudioConnection          patchCord4(mixer1, 0, i2s1, 1);
+AudioConnection          patchCord2(playSdWav2, 0, mixer1, 2);
+AudioConnection          patchCord3(playSdWav3, 0, mixer1, 3);
+AudioConnection          patchCord4(mixer1, 0, i2s1, 0);
+AudioConnection          patchCord5(mixer1, 0, i2s1, 1);
 // GUItool: end automatically generated code
 
 AudioControlSGTL5000     sgtl5000_1;
