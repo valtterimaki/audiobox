@@ -13,8 +13,8 @@ AudioMixer4              mixer1;
 AudioOutputI2S           i2s1;
 AudioConnection          patchCord1(playSdWav1, 0, mixer1, 0);
 AudioConnection          patchCord2(playSdWav2, 0, mixer1, 1);
-AudioConnection          patchCord2(playSdWav2, 0, mixer1, 2);
-AudioConnection          patchCord3(playSdWav3, 0, mixer1, 3);
+AudioConnection          patchCord2(playSdWav3, 0, mixer1, 2);
+AudioConnection          patchCord3(playSdWav4, 0, mixer1, 3);
 AudioConnection          patchCord4(mixer1, 0, i2s1, 0);
 AudioConnection          patchCord5(mixer1, 0, i2s1, 1);
 // GUItool: end automatically generated code
@@ -88,16 +88,18 @@ class SimpleTimer {
     }
 };
 
-SimpleTimer timerA(500);
+SimpleTimer timerA(1000);
 SimpleTimer timerB(1000);
 
 void stopAll() {
   playSdWav1.stop();
   playSdWav2.stop();
+  playSdWav3.stop();
+  playSdWav4.stop();
   delay(5);
 }
 
-void playFile(AudioPlaySdWav &track, char bank, const char* track, int index) {
+void playFile(AudioPlaySdWav &track, char bank, const char* trackname, int index) {
 
   // 1. Calculate buffer size: 1 (char) + strlen(descriptor) + ~3 (digits) + 5 (.WAV) + 1 (null)
   // 32 bytes is a safe, conservative buffer for most Arduino filenames.
@@ -105,7 +107,7 @@ void playFile(AudioPlaySdWav &track, char bank, const char* track, int index) {
 
   // 2. Format: "A_trackname_1.WAV"
   // %c = char, %s = string, %d = integer
-  sprintf(filenameBuffer, "%c_%s_%d.WAV", letter, descriptor, index);
+  sprintf(filenameBuffer, "%c_%s_%d.WAV", bank, trackname, index);
 
   // Error failsafe
   if (!file || !file[0]) return;  
@@ -123,9 +125,14 @@ void handleChannelPlayback(int ch) {
   switch (ch) {
 
     case 0:
-      // Check first that the audio is not playing
-      if (playSdWav1.isPlaying() == false) {  
-        playFile(playSdWav1, 'A', "rytmi", random(0,4));
+      // Piano rhythm, steady intervals
+      if (timerA.isReady()) { 
+        playFile(playSdWav1, 'A', "rytmi", random(1,23));
+      }
+      // Piano echo, slightly random intervals
+      if (timerB.isReady()) { 
+        playFile(playSdWav2, 'A', "kaiku", random(1,24));
+        timerB.setInterval(random(1000, 2000));
       }
       break;
 
@@ -158,6 +165,9 @@ void handleChannelPlayback(int ch) {
 
 void setup() {
   Serial.begin(9600);
+
+  timerA.start();
+  timerB.start();
 
   for (int i = 0; i < 8; i++) {
     pinMode(switchPins[i], INPUT_PULLUP); // enables internal pull-up resistor
@@ -220,17 +230,3 @@ void loop() {
   handleChannelPlayback(chan);
 
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
