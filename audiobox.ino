@@ -41,18 +41,55 @@ AudioControlSGTL5000     sgtl5000_1;
 
 
 // Pins for the 8-way switch (TODO: reorder later)
-const int switchPins[8] = {25, 26, 27, 28, 29, 30, 31, 32}; 
-
-// The wav files
-// c + channel number, t + track number
-const char *wav_c0_t0[8] = {"test_1.WAV", "test_2.WAV", "test_3.WAV", "test_4.WAV"};
+const int switchPins[8] = {25, 26, 27, 28, 29, 30, 31, 32};
 
 // Channel state trackers
 int chan = 0;
 int prev_chan = 0;
 
 
-// --- FUNCTIONS ---
+// --- FUNCTIONS & CLASSES ---
+
+class SimpleTimer {
+  private:
+    uint32_t lastMillis;
+    uint32_t interval;
+    bool enabled;
+
+  public:
+    SimpleTimer(uint32_t intervalMillis = 1000) {
+      interval = intervalMillis;
+      lastMillis = 0;
+      enabled = false;
+    }
+
+    void start() {
+      lastMillis = millis();
+      enabled = true;
+    }
+
+    void stop() {
+      enabled = false;
+    }
+
+    void setInterval(uint32_t newInterval) {
+      interval = newInterval;
+    }
+
+    // This is the "polling" function
+    bool isReady() {
+      if (!enabled) return false;
+      
+      if (millis() - lastMillis >= interval) {
+        lastMillis = millis(); // Reset for the next interval
+        return true;
+      }
+      return false;
+    }
+};
+
+SimpleTimer timerA(500);
+SimpleTimer timerB(1000);
 
 void stopAll() {
   playSdWav1.stop();
@@ -60,14 +97,23 @@ void stopAll() {
   delay(5);
 }
 
-void playFile(AudioPlaySdWav &track, const char* file) {
+void playFile(AudioPlaySdWav &track, char bank, const char* track, int index) {
+
+  // 1. Calculate buffer size: 1 (char) + strlen(descriptor) + ~3 (digits) + 5 (.WAV) + 1 (null)
+  // 32 bytes is a safe, conservative buffer for most Arduino filenames.
+  char filenameBuffer[32]; 
+
+  // 2. Format: "A_trackname_1.WAV"
+  // %c = char, %s = string, %d = integer
+  sprintf(filenameBuffer, "%c_%s_%d.WAV", letter, descriptor, index);
+
   // Error failsafe
-  if (!file || !file[0]) return;
+  if (!file || !file[0]) return;  
   // Start playback, with error checking
-  if (track.play(file)) {
-    Serial.printf("Playing %s\n", file);
+  if (track.play(filenameBuffer)) {
+    Serial.printf("Playing %s\n", filenameBuffer);
   } else {
-    Serial.printf("ERROR: couldn't play %s\n", file);
+    Serial.printf("ERROR: couldn't play %s\n", filenameBuffer);
   }
   delay(10); // wait for library to parse WAV info
 }
@@ -79,7 +125,7 @@ void handleChannelPlayback(int ch) {
     case 0:
       // Check first that the audio is not playing
       if (playSdWav1.isPlaying() == false) {  
-        playFile(playSdWav1, wav_c0_t0[random(0,4)]);
+        playFile(playSdWav1, 'A', "rytmi", random(0,4));
       }
       break;
 
