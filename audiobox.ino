@@ -5,18 +5,20 @@
 #include <SerialFlash.h>
 
 // GUItool: begin automatically generated code
-AudioPlaySdWav           playSdWav1;
-AudioPlaySdWav           playSdWav2;
-AudioPlaySdWav           playSdWav3;
-AudioPlaySdWav           playSdWav4;
+AudioPlayWAVstereo       playSdWav1;
+AudioPlayWAVstereo       playSdWav2;
+AudioPlayWAVstereo       playSdWav3;
+AudioPlayWAVstereo       playSdWav4;
+AudioEffectFreeverb      reverb1;      
 AudioMixer4              mixer1;
 AudioOutputI2S           i2s1;
 AudioConnection          patchCord1(playSdWav1, 0, mixer1, 0);
 AudioConnection          patchCord2(playSdWav2, 0, mixer1, 1);
-AudioConnection          patchCord2(playSdWav3, 0, mixer1, 2);
-AudioConnection          patchCord3(playSdWav4, 0, mixer1, 3);
-AudioConnection          patchCord4(mixer1, 0, i2s1, 0);
-AudioConnection          patchCord5(mixer1, 0, i2s1, 1);
+AudioConnection          patchCord3(playSdWav3, 0, mixer1, 2);
+AudioConnection          patchCord4(playSdWav4, 0, mixer1, 3);
+AudioConnection          patchCord5(mixer1, reverb1);
+AudioConnection          patchCord6(reverb1, 0, i2s1, 0);
+AudioConnection          patchCord7(reverb1, 0, i2s1, 1);
 // GUItool: end automatically generated code
 
 AudioControlSGTL5000     sgtl5000_1;
@@ -88,8 +90,10 @@ class SimpleTimer {
     }
 };
 
-SimpleTimer timerA(1000);
-SimpleTimer timerB(1000);
+SimpleTimer timerA(10000);
+SimpleTimer timerB(10000);
+SimpleTimer timerC(10000);
+
 
 void stopAll() {
   playSdWav1.stop();
@@ -99,25 +103,25 @@ void stopAll() {
   delay(5);
 }
 
-void playFile(AudioPlaySdWav &track, char bank, const char* trackname, int index) {
+void playFile(AudioPlayWAVstereo &track, char bank, const char* trackname, int index) {
 
   // 1. Calculate buffer size: 1 (char) + strlen(descriptor) + ~3 (digits) + 5 (.WAV) + 1 (null)
   // 32 bytes is a safe, conservative buffer for most Arduino filenames.
   char filenameBuffer[32]; 
 
-  // 2. Format: "A_trackname_1.WAV"
+  // 2. Format: "A_tracknumber_1.WAV"
   // %c = char, %s = string, %d = integer
   sprintf(filenameBuffer, "%c_%s_%d.WAV", bank, trackname, index);
 
   // Error failsafe
-  if (!file || !file[0]) return;  
+  if (filenameBuffer[0] == '\0') return; 
   // Start playback, with error checking
   if (track.play(filenameBuffer)) {
     Serial.printf("Playing %s\n", filenameBuffer);
   } else {
     Serial.printf("ERROR: couldn't play %s\n", filenameBuffer);
   }
-  delay(10); // wait for library to parse WAV info
+
 }
 
 void handleChannelPlayback(int ch) {
@@ -127,13 +131,18 @@ void handleChannelPlayback(int ch) {
     case 0:
       // Piano rhythm, steady intervals
       if (timerA.isReady()) { 
-        playFile(playSdWav1, 'A', "rytmi", random(1,23));
+        playFile(playSdWav1, 'A', "1", random(1,23));
       }
-      // Piano echo, slightly random intervals
+      // Piano echos, slightly random intervals
       if (timerB.isReady()) { 
-        playFile(playSdWav2, 'A', "kaiku", random(1,24));
-        timerB.setInterval(random(1000, 2000));
+        playFile(playSdWav2, 'A', "2", random(1,24));
+        timerB.setInterval(random(10000, 20000));
       }
+      if (timerB.isReady()) { 
+        playFile(playSdWav3, 'A', "2", random(1,24));
+        timerB.setInterval(random(15000, 22000));
+      }
+
       break;
 
     case 1:
@@ -159,15 +168,21 @@ void handleChannelPlayback(int ch) {
   }
 }
 
+// DEBUG
+unsigned long lastDebugPrint = 0;
+
 
 // --- SETUP --- 
-
 
 void setup() {
   Serial.begin(9600);
 
   timerA.start();
   timerB.start();
+  timerC.start();
+
+  reverb1.roomsize(0.99);
+  reverb1.damping(0.01);
 
   for (int i = 0; i < 8; i++) {
     pinMode(switchPins[i], INPUT_PULLUP); // enables internal pull-up resistor
@@ -183,13 +198,17 @@ void setup() {
   sgtl5000_1.enable();
   sgtl5000_1.volume(0.1);
 
-  mixer1.gain(0, 0.2);
-  mixer1.gain(1, 0.2);
+  playSdWav1.createBuffer(2048,AudioBuffer::inHeap);
+  playSdWav2.createBuffer(2048,AudioBuffer::inHeap);
+  playSdWav3.createBuffer(2048,AudioBuffer::inHeap);
+  playSdWav4.createBuffer(2048,AudioBuffer::inHeap);
+
+  mixer1.gain(0, 0.5);
+  mixer1.gain(1, 0.5);
 
   SPI.setMOSI(SDCARD_MOSI_PIN);
   SPI.setSCK(SDCARD_SCK_PIN);
-  if (!(SD.begin(SDCARD_CS_PIN))) {
-    // stop here, but print a message repetitively
+  if (!(SD.begin(BUILTIN_SDCARD))) {
     while (1) {
       Serial.println("Unable to access the SD card");
       delay(500);
@@ -228,5 +247,21 @@ void loop() {
 
   // Actual playback
   handleChannelPlayback(chan);
+
+  
+  if (millis() - lastDebugPrint > 1000) {
+    Serial.print("Current Mem: ");
+    Serial.println(AudioMemoryUsage());
+    Serial.print("Memory: ");
+    Serial.print(AudioMemoryUsageMax());
+    Serial.print(" | CPU: ");
+    Serial.print(AudioProcessorUsage());
+    Serial.println("%");
+    
+    // Reset the max counter so we see current spikes, not old ones
+    AudioMemoryUsageMaxReset(); 
+    lastDebugPrint = millis();
+    }
+  
 
 }
