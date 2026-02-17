@@ -10,29 +10,26 @@ AudioPlayWAVstereo       playSdWav1;
 AudioPlayWAVstereo       playSdWav2;
 AudioPlayWAVstereo       playSdWav3;
 AudioPlayWAVstereo       playSdWav4;
-AudioMixer4              wavMixer;         //xy=388,594
-AudioEffectDelay         delay1;         //xy=587,673
-AudioMixer4              echoMixer;         //xy=794,591
-AudioEffectFreeverb      reverb1;      //xy=982,641
-AudioMixer4              reverbMix;         //xy=1156,610
-AudioAmplifier           amp1;           //xy=1321,604
-AudioAnalyzeRMS          rms1;           //xy=1321,669
-AudioOutputI2S           i2s1;           //xy=1473,601
-AudioConnection          patchCord1(playSdWav1, 0, wavMixer, 0);
-AudioConnection          patchCord2(playSdWav2, 0, wavMixer, 1);
+AudioPlayWAVstereo       playSdWav5;
+AudioMixer4              wavMixer2;         //xy=512,655
+AudioMixer4              wavMixer;       //xy=696,497
+AudioEffectFreeverb      reverb1;        //xy=1290,544
+AudioMixer4              reverbMix;      //xy=1464,513
+AudioAmplifier           amp1;           //xy=1629,507
+AudioAnalyzeRMS          rms1;           //xy=1629,572
+AudioOutputI2S           i2s1;           //xy=1781,504
+AudioConnection          patchCord1(playSdWav4, 0, wavMixer2, 0);
+AudioConnection          patchCord2(playSdWav5, 0, wavMixer2, 1);
 AudioConnection          patchCord3(playSdWav3, 0, wavMixer, 2);
-AudioConnection          patchCord4(playSdWav4, 0, wavMixer, 3);
-AudioConnection          patchCord5(wavMixer, delay1);
-AudioConnection          patchCord6(wavMixer, 0, echoMixer, 0);
-AudioConnection          patchCord7(delay1, 0, echoMixer, 1);
-AudioConnection          patchCord8(delay1, 1, echoMixer, 2);
-AudioConnection          patchCord9(delay1, 2, echoMixer, 3);
-AudioConnection          patchCord10(echoMixer, 0, reverbMix, 0);
-AudioConnection          patchCord11(echoMixer, reverb1);
-AudioConnection          patchCord12(reverb1, 0, reverbMix, 1);
-AudioConnection          patchCord13(reverbMix, amp1);
-AudioConnection          patchCord14(reverbMix, rms1);
-AudioConnection          patchCord15(amp1, 0, i2s1, 0);
+AudioConnection          patchCord4(playSdWav2, 0, wavMixer, 1);
+AudioConnection          patchCord5(playSdWav1, 0, wavMixer, 0);
+AudioConnection          patchCord6(wavMixer2, 0, wavMixer, 3);
+AudioConnection          patchCord7(wavMixer, 0, reverbMix, 0);
+AudioConnection          patchCord8(wavMixer, reverb1);
+AudioConnection          patchCord9(reverb1, 0, reverbMix, 1);
+AudioConnection          patchCord10(reverbMix, amp1);
+AudioConnection          patchCord11(reverbMix, rms1);
+AudioConnection          patchCord12(amp1, 0, i2s1, 0);
 
 AudioControlSGTL5000     sgtl5000_1;
 
@@ -87,10 +84,11 @@ float compression;
 // Blings controls
 int blings_base = 1;
 int blings_mult = 7;
+int blings_notes[5];
 
 //######## TIMER SEQUENCES ########
 
-Step seqDefault[] =   { {1000,  1000,  0, 0, 0, {}} }; // Simple one second timer loop
+Step seqDefault[] =   { {500,  500,  0, 0, 0, {}} }; // Simple one second timer loop
 
 Step seqPiano1[] =    { {10000, 11000, 0, 0, 0, {}} }; // A - Base piano
 Step seqPiano2[] =    { {10000, 20000, 0, 0, 0, {}} }; // A - Additional piano 1
@@ -108,10 +106,12 @@ Step seqRadio1[] =    { {1100,  1100,  1, 1, 0, {}},   // D - Radio mast words
 
 Step seqChitter1[] =  { {9000,  17000, 0, 0, 0, {}} };  // E - Echos for the chitter
 
-Step seqBlings1[] =   { {200,   300,   0, 0, 0, {}},    // B - Blings
-                        {200,   300,   1, 1, 0, {}},
-                        {200,   300,   2, 2, 0, {}},
-                        {6000,  9000,  3, 3, 0, {}}};
+Step seqBlings1[] =   { {100,   400,   0, 0, 0, {}},    // B - Blings
+                        {100,   400,   1, 1, 0, {}},
+                        {100,   400,   2, 2, 0, {}},
+                        {100,   400,   3, 3, 0, {}},
+                        {6000,  9000,  4, 4, 0, {}}};
+Step seqBlingsBase[] ={ {15000, 50000, 0, 0, 0, {}} };
 
 
 // ######## FUNCTIONS & CLASSES ########
@@ -250,6 +250,7 @@ void handleChannelPlayback(int ch) {
   // If the physical switch (ch) is different from our current target (pending_chan)
   if (ch != pending_chan) {
     stopAll();
+    reverbMix.gain(1, 0);
     
     // Optional: Re-trigger transition sound
     playFile(playSdWav4, 'D', "4", 1); 
@@ -284,9 +285,6 @@ void setupChannelSpecifics(int ch) {
     // THE PIANO
     case 0:
       //Set effects
-      echoMixer.gain(1, 0);
-      echoMixer.gain(2, 0);
-      echoMixer.gain(3, 0);
       reverbMix.gain(1, 0);
       compression = 0;
       // Set timers
@@ -301,9 +299,6 @@ void setupChannelSpecifics(int ch) {
     // THE WAILS
     case 1:
       // Set effects
-      echoMixer.gain(1, 0);
-      echoMixer.gain(2, 0);
-      echoMixer.gain(3, 0);
       reverbMix.gain(1, 0);
       compression = 0;
       // Set timers
@@ -316,12 +311,6 @@ void setupChannelSpecifics(int ch) {
     // THE RADIO MAST
     case 2:
       // Set effects
-      delay1.delay(0, 100);
-      delay1.delay(1, 200);
-      delay1.delay(2, 300);
-      echoMixer.gain(1, 0.1);
-      echoMixer.gain(2, 0.002);
-      echoMixer.gain(3, 0.001);
       reverbMix.gain(1, 0);
       compression = 0;
       // Set timers
@@ -332,9 +321,6 @@ void setupChannelSpecifics(int ch) {
     // DISTANT CHITTER
     case 3:
       // Set effects
-      echoMixer.gain(1, 0);
-      echoMixer.gain(2, 0);
-      echoMixer.gain(3, 0);
       reverbMix.gain(1, 0);
       compression = 0;
       // Set timers
@@ -345,20 +331,13 @@ void setupChannelSpecifics(int ch) {
     // HUMMING
     case 4:
       // Set effects
-      echoMixer.gain(1, 0);
-      echoMixer.gain(2, 0);
-      echoMixer.gain(3, 0);
       reverbMix.gain(1, 0);
       compression = 0;
       break;
 
-
     // RUMBLE
     case 5:
       // Set effects
-      echoMixer.gain(1, 0);
-      echoMixer.gain(2, 0);
-      echoMixer.gain(3, 0);
       reverbMix.gain(1, 0);
       compression = 0;
       break;
@@ -366,14 +345,13 @@ void setupChannelSpecifics(int ch) {
     // BLINGS
     case 6:
       // Set effects
-      echoMixer.gain(1, 0.2);
-      echoMixer.gain(2, 0.1);
-      echoMixer.gain(3, 0.05);
       reverbMix.gain(1, 0.4);
       compression = 0;
       // Set timers
-      timerA.setSequence(seqBlings1, 4);
+      timerA.setSequence(seqBlings1, 5);
       timerA.start();
+      timerB.setSequence(seqBlingsBase, 1);
+      timerB.start();
       break;
 
     case 7:
@@ -470,15 +448,19 @@ void runActiveChannelLogic(int ch) {
     // BLINGS
     case 6:
 
-      int blings_notes[4];
-      getUniqueRandoms(blings_notes, 4, 10);
-
       if (timerA.update(result)) {
+        
         if (result == 0) playFile(playSdWav1, 'B', "1", blings_base + (blings_mult * blings_notes[0]));
         if (result == 1) playFile(playSdWav2, 'B', "1", blings_base + (blings_mult * blings_notes[1]));
         if (result == 2) playFile(playSdWav3, 'B', "1", blings_base + (blings_mult * blings_notes[2]));
         if (result == 3) playFile(playSdWav4, 'B', "1", blings_base + (blings_mult * blings_notes[3]));
+        if (result == 4) {
+          playFile(playSdWav5, 'B', "1", blings_base + (blings_mult * blings_notes[4]));
+          getUniqueRandoms(blings_notes, 5, 9);
+        }
       }
+
+      if (timerB.update()) blings_base = random(0,8);
 
       break;
 
@@ -520,25 +502,21 @@ void setup() {
   playSdWav2.createBuffer(2048,AudioBuffer::inHeap);
   playSdWav3.createBuffer(2048,AudioBuffer::inHeap);
   playSdWav4.createBuffer(2048,AudioBuffer::inHeap);
+  playSdWav5.createBuffer(2048,AudioBuffer::inHeap);
 
   wavMixer.gain(0, 1);
   wavMixer.gain(1, 1);
   wavMixer.gain(2, 1);
   wavMixer.gain(3, 1);
-
-  delay1.delay(0, 800);
-  delay1.delay(1, 1600);
-  delay1.delay(2, 2400);
-
-  echoMixer.gain(0, 1);
-  echoMixer.gain(1, 0);
-  echoMixer.gain(2, 0);
-  echoMixer.gain(3, 0);
+  wavMixer.gain(1, 1);
+  wavMixer.gain(2, 1);
 
   reverbMix.gain(0, 1);
   reverbMix.gain(1, 0);
   reverb1.roomsize(0.99);
-  reverb1.damping(0.4);
+  reverb1.damping(0.7);
+
+  getUniqueRandoms(blings_notes, 5, 9);
 
   SPI.setMOSI(SDCARD_MOSI_PIN);
   SPI.setSCK(SDCARD_SCK_PIN);
@@ -573,7 +551,7 @@ void loop() {
   handleChannelPlayback(chan);
 
   
-  if (millis() - lastDebugPrint > 1000) {
+  /*if (millis() - lastDebugPrint > 1000) {
     Serial.print("Current Mem: ");
     Serial.println(AudioMemoryUsage());
     Serial.print("Memory: ");
@@ -585,9 +563,7 @@ void loop() {
     // Reset the max counter so we see current spikes, not old ones
     AudioMemoryUsageMaxReset(); 
     lastDebugPrint = millis();
-
-    
-    }
+  }*/
   
 
 }
