@@ -4,7 +4,8 @@
 #include <SD.h>
 #include <SerialFlash.h>
 
-// GUItool: begin automatically generated code
+// AUDIO ROUTINGS
+
 AudioPlayWAVstereo       playSdWav1;
 AudioPlayWAVstereo       playSdWav2;
 AudioPlayWAVstereo       playSdWav3;
@@ -32,9 +33,10 @@ AudioConnection          patchCord12(reverb1, 0, reverbMix, 1);
 AudioConnection          patchCord13(reverbMix, amp1);
 AudioConnection          patchCord14(reverbMix, rms1);
 AudioConnection          patchCord15(amp1, 0, i2s1, 0);
-// GUItool: end automatically generated code
 
 AudioControlSGTL5000     sgtl5000_1;
+
+// PINS
 
 // Use these with the Teensy Audio Shield
 //#define SDCARD_CS_PIN    10
@@ -52,8 +54,23 @@ AudioControlSGTL5000     sgtl5000_1;
 //#define SDCARD_SCK_PIN   13
 
 
-// ---------
+// ######## STRUCTS FOR TIMERS ########
 
+struct Jump {
+  uint8_t targetStep;
+  uint8_t probability; // 0-100%
+};
+
+struct Step {
+  uint32_t minTime;
+  uint32_t maxTime;
+  int minVal;
+  int maxVal;
+  uint8_t jumpCount;
+  Jump jumps[3];
+};
+
+//######## GLOBAL VARIABLES ########
 
 // Pins for the 8-way switch (TODO: reorder later)
 const int switchPins[8] = {25, 26, 27, 28, 29, 30, 31, 32};
@@ -61,140 +78,110 @@ const int switchPins[8] = {25, 26, 27, 28, 29, 30, 31, 32};
 // Channel state trackers
 int chan = 0;
 int prev_chan = -1;
-
-// word status
-int word_status;
+int pending_chan = -1;
+bool is_transitioning = false;
 
 // Compression
 float compression;
 
+//######## TIMER SEQUENCES ########
 
-// --- FUNCTIONS & CLASSES ---
+Step seqDefault[] = { {1000,  1000,  0, 0, 0, {}} }; // Simple one second timer loop
 
-class SimpleTimer {
+Step seqPiano1[] =  { {10000, 11000, 0, 0, 0, {}} }; // A - Base piano
+Step seqPiano2[] =  { {10000, 20000, 0, 0, 0, {}} }; // A - Additional piano 1
+Step seqPiano3[] =  { {15000, 22000, 0, 0, 0, {}} }; // A - Additional piano 2
+
+Step seqWails1[] =  { {11000, 13000, 0, 0, 0, {}} }; // B - Main echos
+Step seqWails2[] =  { {15000, 22000, 0, 0, 0, {}} }; // B - Wails
+
+Step seqRadio1[] =  { {1100,  1100,  1, 1, 0, {}},   // D - Radio mast words
+                      {1100,  1100,  1, 1, 0, {}},
+                      {1100,  1200,  1, 1, 3, {{5, 70}, {3, 30}, {4, 10}}},
+                      {1100,  1100,  2, 2, 0, {}},
+                      {1100,  1100 , 3, 3, 0, {}}, 
+                      {6000,  8000,  0, 0, 0, {}}};
+
+
+// ######## FUNCTIONS & CLASSES ########
+
+class UniversalSequencer {
   private:
-    uint32_t lastMillis;
-    uint32_t interval;
-    bool enabled;
+    Step* _steps;
+    uint8_t _numSteps;
+    uint8_t _currentIndex;
+    uint32_t _lastMillis;
+    uint32_t _currentWaitTime;
+    bool _running;
 
-  public:
-    SimpleTimer(uint32_t intervalMillis = 1000) {
-      interval = intervalMillis;
-      lastMillis = 0;
-      enabled = false;
+    void prepareStep() {
+      Step s = _steps[_currentIndex];
+      _currentWaitTime = (s.minTime == s.maxTime) ? s.minTime : random(s.minTime, s.maxTime + 1);
     }
 
-    void start() {
-      lastMillis = millis();
-      enabled = true;
+    uint8_t getNextIndex() {
+      Step s = _steps[_currentIndex];
+      if (s.jumpCount > 0) {
+        int roll = random(0, 100);
+        uint8_t cumulative = 0;
+        for (uint8_t i = 0; i < s.jumpCount; i++) {
+          cumulative += s.jumps[i].probability;
+          if (roll < cumulative) return s.jumps[i].targetStep;
+        }
+      }
+      return (_currentIndex + 1) % _numSteps;
+    }
+
+  public:
+    UniversalSequencer(Step* steps, uint8_t count) : _steps(steps), _numSteps(count), _currentIndex(0), _running(false) {}
+
+    void start(bool immediate = false) {
+      _currentIndex = 0;
+      _lastMillis = millis();
+      _running = true;
+      if (immediate) {
+        _currentWaitTime = 0;
+      } else {
+        prepareStep();
+      }
     }
 
     void stop() {
-      enabled = false;
+      _running = false;
     }
 
-    void setInterval(uint32_t newInterval) {
-      interval = newInterval;
+    void setSequence(Step* newSteps, uint8_t newCount) {
+      _steps = newSteps;
+      _numSteps = newCount;
+      _currentIndex = 0; // Reset index for the new sequence
     }
 
-    // This is the "polling" function
-    bool isReady() {
-      if (!enabled) return false;
-      
-      if (millis() - lastMillis >= interval) {
-        lastMillis = millis(); // Reset for the next interval
+    bool update(int &outputValue) {
+      if (!_running) return false;
+      if (millis() - _lastMillis >= _currentWaitTime) {
+        _lastMillis = millis();
+        Step s = _steps[_currentIndex];
+        outputValue = (s.minVal == s.maxVal) ? s.minVal : random(s.minVal, s.maxVal + 1);
+        _currentIndex = getNextIndex();
+        prepareStep();
         return true;
       }
       return false;
     }
-};
 
-SimpleTimer timerA(1000);
-SimpleTimer timerB(1000);
-SimpleTimer timerC(1000);
-
-class RadioMastTimer {
-  private:
-    uint32_t lastMillis;
-    uint32_t interval;
-    uint32_t nextStep;
-    bool enabled;
-
-  public:
-    RadioMastTimer(uint32_t intervalMillis = 1000) {
-      interval = intervalMillis;
-      lastMillis = 0;
-      enabled = false;
-      // Use this to determine next step. 0, 1 & 2 are for the numbers, 3 is for cardinals, 4 is the levels.
-      nextStep = 0; 
-    }
-
-    void start() {
-      lastMillis = millis();
-      enabled = true;
-    }
-
-    void stop() {
-      enabled = false;
-    }
-
-    void setInterval(uint32_t newInterval) {
-      interval = newInterval;
-    }
-
-    // This is the "polling" function
-    int isReady() {
-      if (!enabled) return -1;
-      
-      // Is interval triggered?
-      if (millis() - lastMillis >= interval) {
-
-        if (nextStep == 0) { // Is the next word the numbers
-          lastMillis = millis(); 
-          nextStep = 1;
-          setInterval(1100);
-          return 0;
-          
-        } else if (nextStep == 1) { // Is the next word the cardinals
-          lastMillis = millis(); 
-          nextStep = 2;
-          setInterval(1100);
-          return 0;
-
-        } else if (nextStep == 2) { // Is the next word the cardinals
-          lastMillis = millis(); 
-          int chance = random(100);
-          if (chance <= 50){
-            nextStep = 0;
-            setInterval(random(4000, 6000));
-          } else if (chance > 50 && chance < 90) {
-            nextStep = 3;
-            setInterval(2000);
-          } else {
-            nextStep = 4;
-            setInterval(2000);
-          }
-          return 0;
-
-        } else if (nextStep == 3) { // Is the next word the cardinals
-          lastMillis = millis(); 
-          nextStep = 0;
-          setInterval(random(4000, 6000));
-          return 1;
-
-        } else if (nextStep == 4) { // Is the next word the levels
-          lastMillis = millis();
-          nextStep = 0;
-          setInterval(random(4000, 6000));
-          return 2;
-
-        }
-      }
-      return -1;
+    bool update() {
+      int dummy;
+      return update(dummy);
     }
 };
 
-RadioMastTimer mast_timer(1000);
+// Inititate the sequencers
+
+UniversalSequencer timerA(seqDefault, 1);
+UniversalSequencer timerB(seqDefault, 1);
+UniversalSequencer timerC(seqDefault, 1);
+UniversalSequencer transitionTimer(seqDefault, 1);
+
 
 void stopAll() {
   playSdWav1.stop();
@@ -226,112 +213,152 @@ void playFile(AudioPlayWAVstereo &track, char bank, const char* trackname, int i
 }
 
 void handleChannelPlayback(int ch) {
+  // 1. TRIGGER OR RE-TRIGGER TRANSITION
+  // If the physical switch (ch) is different from our current target (pending_chan)
+  if (ch != pending_chan) {
+    stopAll();
+    
+    // Optional: Re-trigger transition sound
+    playFile(playSdWav4, 'D', "4", 1); 
+    
+    pending_chan = ch;      // Update our destination to the newest switch position
+    is_transitioning = true;
+    transitionTimer.start(); // Restart the 1-second countdown
+    
+    Serial.printf("Switch moved to %d. (Re)starting transition.\n", pending_chan);
+    return;
+  }
+
+  // 2. HANDLE THE TIMED DELAY
+  if (is_transitioning) {
+    if (transitionTimer.update()) {
+      is_transitioning = false;
+      prev_chan = pending_chan; // Confirm the target as the active channel
+      setupChannelSpecifics(prev_chan);
+      Serial.printf("Transition finalized. Active: %d\n", prev_chan);
+    }
+    return; // Block channel logic until timer expires
+  }
+
+  // 3. RUN ACTIVE CHANNEL LOGIC
+  runActiveChannelLogic(prev_chan);
+}
+
+void setupChannelSpecifics(int ch) {
 
   switch (ch) {
 
     // THE PIANO
     case 0:
-      // Initial start operations
-      if (prev_chan != chan) {
-        //Set effects
-        echoMixer.gain(1, 0);
-        echoMixer.gain(2, 0);
-        echoMixer.gain(3, 0);
-        reverbMix.gain(1, 0);
-        // Set timers
-        timerA.setInterval(10000);
-        timerB.setInterval(random(10000, 20000));
-        timerC.setInterval(random(15000, 22000));
-        timerA.start();
-        timerB.start();
-        timerC.start();
-        // Stop all and change prev chan tracker value
-        stopAll();
-        Serial.printf("Switching to channel %d\n", chan);
-        prev_chan = chan;
-      }
+      //Set effects
+      echoMixer.gain(1, 0);
+      echoMixer.gain(2, 0);
+      echoMixer.gain(3, 0);
+      reverbMix.gain(1, 0);
+      // Set timers
+      timerA.setSequence(seqPiano1, 1);
+      timerB.setSequence(seqPiano2, 1);
+      timerC.setSequence(seqPiano2, 1);
+      timerA.start(true);
+      timerB.start();
+      timerC.start();
+      break;
+
+    // THE WAILS
+    case 1:
+      // Set effects
+      echoMixer.gain(1, 0);
+      echoMixer.gain(2, 0);
+      echoMixer.gain(3, 0);
+      reverbMix.gain(1, 0);
+      // Set timers
+      timerA.setSequence(seqWails1, 1);
+      timerB.setSequence(seqWails2, 1);
+      timerA.start(true);
+      timerB.start();
+      break;
+
+    // THE RADIO MAST
+    case 2:
+      // Set effects
+      delay1.delay(0, 100);
+      delay1.delay(1, 200);
+      delay1.delay(2, 300);
+      echoMixer.gain(1, 0.1);
+      echoMixer.gain(2, 0.002);
+      echoMixer.gain(3, 0.001);
+      reverbMix.gain(1, 0);
+      compression = 0;
+      // Set timers
+      timerA.setSequence(seqRadio1, 6);
+      timerA.start();
+      break;
+
+    case 3:
+      if (!playSdWav2.isPlaying()) playFile(playSdWav2, 'E', "2", 1);
+      break;
+
+    case 4:
+
+      break;
+
+    case 5:
+
+      break;
+
+    case 6:
+
+      break;
+
+    case 7:
+
+      break;
+
+  }
+}
+
+void runActiveChannelLogic(int ch) {
+  
+  switch (ch) {
+
+    // THE PIANO
+    case 0:
     
       // Piano rhythm, steady intervals
-      if (timerA.isReady()) { 
+      if (timerA.update()) { 
         playFile(playSdWav1, 'A', "1", random(1,23));
       }
       // Piano echos, slightly random intervals
-      if (timerB.isReady()) { 
+      if (timerB.update()) { 
         playFile(playSdWav2, 'A', "2", random(1,24));
-        timerB.setInterval(random(10000, 20000));
       }
-      if (timerC.isReady()) { 
+      if (timerC.update()) { 
         playFile(playSdWav3, 'A', "2", random(1,24));
-        timerC.setInterval(random(15000, 22000));
       }
 
       break;
 
     // THE WAILS
     case 1:
-
-      // Initial start operations
-      if (prev_chan != chan) {
-        // Set effects
-        echoMixer.gain(1, 0);
-        echoMixer.gain(2, 0);
-        echoMixer.gain(3, 0);
-        reverbMix.gain(1, 0);
-        // Set timers
-        timerA.setInterval(random(11000, 13000));
-        timerB.setInterval(random(15000, 22000));
-        timerA.start();
-        timerB.start();
-        // Stop all and change prev chan tracker value
-        stopAll();
-        Serial.printf("Switching to channel %d\n", chan);
-        prev_chan = chan;
-      }
     
       // Main echos
-      if (timerA.isReady()) { 
+      if (timerA.update()) { 
         playFile(playSdWav1, 'C', "1", random(1,105));
-        timerA.setInterval(random(12000, 14000));
       }
       // Wails
-      if (timerB.isReady()) { 
+      if (timerB.update()) { 
         playFile(playSdWav2, 'C', "2", random(1,45));
-        timerB.setInterval(random(14000, 20000));
       }
 
       break;
 
     // THE RADIO MAST
     case 2:
-
-      // Initial start operations
-      if (prev_chan != chan) {
-        // Set effects
-        delay1.delay(0, 100);
-        delay1.delay(1, 200);
-        delay1.delay(2, 300);
-        echoMixer.gain(1, 0.1);
-        echoMixer.gain(2, 0.002);
-        echoMixer.gain(3, 0.001);
-        reverbMix.gain(1, 0);
-        compression = 0;
-        // Set timers
-        timerA.setInterval(2000);
-        timerB.setInterval(2000);
-        timerA.start();
-        timerB.start();
-        mast_timer.start();
-        // Stop all and change prev chan tracker value
-        stopAll();
-        Serial.printf("Switching to channel %d\n", chan);
-        prev_chan = chan;
-      }
-
-      
+  
       if (rms1.available()) {
         float last_rms = rms1.read();
         //float comp_mult = 5.0;
-        if (last_rms > compression) compression = (compression + last_rms) / 2;
+        if (last_rms > compression) compression = (compression + last_rms*1.5) / 2;
         if (last_rms <= compression) compression -= 0.001;
         /*if (millis() % 10 == 1) {
           Serial.print(last_rms);
@@ -340,90 +367,48 @@ void handleChannelPlayback(int ch) {
         }*/
       }
    
-    
       // Words
-      word_status = mast_timer.isReady(); 
-      if (word_status == 0) playFile(playSdWav1, 'D', "1", random(1,10));
-      if (word_status == 1) playFile(playSdWav1, 'D', "1", random(13,20));
-      if (word_status == 2) playFile(playSdWav1, 'D', "1", random(11,12));
+      int result;
+      if (timerA.update(result)) {
+        if (result == 1) playFile(playSdWav1, 'D', "1", random(1,10));
+        if (result == 2) playFile(playSdWav1, 'D', "1", random(13,20));
+        if (result == 3) playFile(playSdWav1, 'D', "1", random(11,12));
+      }
 
-      if (timerA.isReady()) playFile(playSdWav2, 'D', "3", 1);
+      if (!playSdWav2.isPlaying()) playFile(playSdWav2, 'D', "3", 1);
 
       break;
 
     case 3:
 
-      // Initial start operations
-      if (prev_chan != chan) {
-        // Set effects
-        // Set timers
-        // Stop all and change prev chan tracker value
-        stopAll();
-        Serial.printf("Switching to channel %d\n", chan);
-        prev_chan = chan;
-      }
+      if (!playSdWav2.isPlaying()) playFile(playSdWav2, 'E', "2", 1);
+
       break;
 
     case 4:
-
-      // Initial start operations
-      if (prev_chan != chan) {
-        // Set effects
-        // Set timers
-        // Stop all and change prev chan tracker value
-        stopAll();
-        Serial.printf("Switching to channel %d\n", chan);
-        prev_chan = chan;
-      }
 
       break;
 
     case 5:
 
-      // Initial start operations
-      if (prev_chan != chan) {
-        // Set effects
-        // Set timers
-        // Stop all and change prev chan tracker value
-        stopAll();
-        Serial.printf("Switching to channel %d\n", chan);
-        prev_chan = chan;
-      }
       break;
 
     case 6:
 
-      // Initial start operations
-      if (prev_chan != chan) {
-        // Set effects
-        // Set timers
-        // Stop all and change prev chan tracker value
-        stopAll();
-        Serial.printf("Switching to channel %d\n", chan);
-        prev_chan = chan;
-      }
       break;
 
     case 7:
 
-      // Initial start operations
-      if (prev_chan != chan) {
-        // Set effects
-        // Set timers
-        // Stop all and change prev chan tracker value
-        stopAll();
-        Serial.printf("Switching to channel %d\n", chan);
-        prev_chan = chan;
-      }
       break;
   }
 }
 
-// DEBUG
+
+// FOR DEBUG
 unsigned long lastDebugPrint = 0;
 
 
-// --- SETUP --- 
+// ######## SETUP ######## 
 
 void setup() {
   Serial.begin(9600);
@@ -481,7 +466,7 @@ void setup() {
 }
 
 
-// --- MAIN LOOP ---
+// ######## MAIN LOOP ########
 
 
 void loop() {
@@ -503,7 +488,7 @@ void loop() {
   handleChannelPlayback(chan);
 
   
-  if (millis() - lastDebugPrint > 1000) {
+  /*if (millis() - lastDebugPrint > 1000) {
     Serial.print("Current Mem: ");
     Serial.println(AudioMemoryUsage());
     Serial.print("Memory: ");
@@ -517,7 +502,7 @@ void loop() {
     lastDebugPrint = millis();
 
     
-    }
+    }*/
   
 
 }
