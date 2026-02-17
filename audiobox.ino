@@ -84,23 +84,34 @@ bool is_transitioning = false;
 // Compression
 float compression;
 
+// Blings controls
+int blings_base = 1;
+int blings_mult = 7;
+
 //######## TIMER SEQUENCES ########
 
-Step seqDefault[] = { {1000,  1000,  0, 0, 0, {}} }; // Simple one second timer loop
+Step seqDefault[] =   { {1000,  1000,  0, 0, 0, {}} }; // Simple one second timer loop
 
-Step seqPiano1[] =  { {10000, 11000, 0, 0, 0, {}} }; // A - Base piano
-Step seqPiano2[] =  { {10000, 20000, 0, 0, 0, {}} }; // A - Additional piano 1
-Step seqPiano3[] =  { {15000, 22000, 0, 0, 0, {}} }; // A - Additional piano 2
+Step seqPiano1[] =    { {10000, 11000, 0, 0, 0, {}} }; // A - Base piano
+Step seqPiano2[] =    { {10000, 20000, 0, 0, 0, {}} }; // A - Additional piano 1
+Step seqPiano3[] =    { {15000, 22000, 0, 0, 0, {}} }; // A - Additional piano 2
 
-Step seqWails1[] =  { {11000, 13000, 0, 0, 0, {}} }; // B - Main echos
-Step seqWails2[] =  { {15000, 22000, 0, 0, 0, {}} }; // B - Wails
+Step seqWails1[] =    { {11000, 13000, 0, 0, 0, {}} }; // C - Main echos
+Step seqWails2[] =    { {15000, 22000, 0, 0, 0, {}} }; // C - Wails
 
-Step seqRadio1[] =  { {1100,  1100,  1, 1, 0, {}},   // D - Radio mast words
-                      {1100,  1100,  1, 1, 0, {}},
-                      {1100,  1200,  1, 1, 3, {{5, 70}, {3, 30}, {4, 10}}},
-                      {1100,  1100,  2, 2, 0, {}},
-                      {1100,  1100 , 3, 3, 0, {}}, 
-                      {6000,  8000,  0, 0, 0, {}}};
+Step seqRadio1[] =    { {1100,  1100,  1, 1, 0, {}},   // D - Radio mast words
+                        {1100,  1100,  1, 1, 0, {}},
+                        {1100,  1200,  1, 1, 3, {{5, 70}, {3, 30}, {4, 10}}},
+                        {1100,  1100,  2, 2, 0, {}},
+                        {1100,  1100,  3, 3, 0, {}}, 
+                        {6000,  8000,  0, 0, 0, {}}};
+
+Step seqChitter1[] =  { {9000,  17000, 0, 0, 0, {}} };  // E - Echos for the chitter
+
+Step seqBlings1[] =   { {200,   300,   0, 0, 0, {}},    // B - Blings
+                        {200,   300,   1, 1, 0, {}},
+                        {200,   300,   2, 2, 0, {}},
+                        {6000,  9000,  3, 3, 0, {}}};
 
 
 // ######## FUNCTIONS & CLASSES ########
@@ -191,6 +202,28 @@ void stopAll() {
   delay(5);
 }
 
+void getUniqueRandoms(int* output, int numToPick, int maxRange) {
+  // 1. Create a pool of all possible values (0 to maxRange-1)
+  int pool[maxRange];
+  for (int i = 0; i < maxRange; i++) {
+    pool[i] = i;
+  }
+
+  // 2. Perform a partial shuffle for the number of values needed
+  for (int i = 0; i < numToPick; i++) {
+    // Pick a random index from the remaining pool
+    int randomIndex = random(i, maxRange);
+
+    // Swap the picked value with the current position i
+    int temp = pool[i];
+    pool[i] = pool[randomIndex];
+    pool[randomIndex] = temp;
+
+    // Store the result
+    output[i] = pool[i];
+  }
+}
+
 void playFile(AudioPlayWAVstereo &track, char bank, const char* trackname, int index) {
 
   // 1. Calculate buffer size: 1 (char) + strlen(descriptor) + ~3 (digits) + 5 (.WAV) + 1 (null)
@@ -255,6 +288,7 @@ void setupChannelSpecifics(int ch) {
       echoMixer.gain(2, 0);
       echoMixer.gain(3, 0);
       reverbMix.gain(1, 0);
+      compression = 0;
       // Set timers
       timerA.setSequence(seqPiano1, 1);
       timerB.setSequence(seqPiano2, 1);
@@ -271,6 +305,7 @@ void setupChannelSpecifics(int ch) {
       echoMixer.gain(2, 0);
       echoMixer.gain(3, 0);
       reverbMix.gain(1, 0);
+      compression = 0;
       // Set timers
       timerA.setSequence(seqWails1, 1);
       timerB.setSequence(seqWails2, 1);
@@ -294,20 +329,51 @@ void setupChannelSpecifics(int ch) {
       timerA.start();
       break;
 
+    // DISTANT CHITTER
     case 3:
-      if (!playSdWav2.isPlaying()) playFile(playSdWav2, 'E', "2", 1);
+      // Set effects
+      echoMixer.gain(1, 0);
+      echoMixer.gain(2, 0);
+      echoMixer.gain(3, 0);
+      reverbMix.gain(1, 0);
+      compression = 0;
+      // Set timers
+      timerA.setSequence(seqChitter1, 1);
+      timerA.start();
       break;
 
+    // HUMMING
     case 4:
-
+      // Set effects
+      echoMixer.gain(1, 0);
+      echoMixer.gain(2, 0);
+      echoMixer.gain(3, 0);
+      reverbMix.gain(1, 0);
+      compression = 0;
       break;
 
+
+    // RUMBLE
     case 5:
-
+      // Set effects
+      echoMixer.gain(1, 0);
+      echoMixer.gain(2, 0);
+      echoMixer.gain(3, 0);
+      reverbMix.gain(1, 0);
+      compression = 0;
       break;
 
+    // BLINGS
     case 6:
-
+      // Set effects
+      echoMixer.gain(1, 0.2);
+      echoMixer.gain(2, 0.1);
+      echoMixer.gain(3, 0.05);
+      reverbMix.gain(1, 0.4);
+      compression = 0;
+      // Set timers
+      timerA.setSequence(seqBlings1, 4);
+      timerA.start();
       break;
 
     case 7:
@@ -325,16 +391,10 @@ void runActiveChannelLogic(int ch) {
     case 0:
     
       // Piano rhythm, steady intervals
-      if (timerA.update()) { 
-        playFile(playSdWav1, 'A', "1", random(1,23));
-      }
+      if (timerA.update()) playFile(playSdWav1, 'A', "1", random(1,23));
       // Piano echos, slightly random intervals
-      if (timerB.update()) { 
-        playFile(playSdWav2, 'A', "2", random(1,24));
-      }
-      if (timerC.update()) { 
-        playFile(playSdWav3, 'A', "2", random(1,24));
-      }
+      if (timerB.update()) playFile(playSdWav2, 'A', "2", random(1,24));
+      if (timerC.update()) playFile(playSdWav3, 'A', "2", random(1,24));
 
       break;
 
@@ -342,13 +402,9 @@ void runActiveChannelLogic(int ch) {
     case 1:
     
       // Main echos
-      if (timerA.update()) { 
-        playFile(playSdWav1, 'C', "1", random(1,105));
-      }
+      if (timerA.update()) playFile(playSdWav1, 'C', "1", random(1,105));
       // Wails
-      if (timerB.update()) { 
-        playFile(playSdWav2, 'C', "2", random(1,45));
-      }
+      if (timerB.update()) playFile(playSdWav2, 'C', "2", random(1,45));
 
       break;
 
@@ -374,26 +430,55 @@ void runActiveChannelLogic(int ch) {
         if (result == 2) playFile(playSdWav1, 'D', "1", random(13,20));
         if (result == 3) playFile(playSdWav1, 'D', "1", random(11,12));
       }
-
+      // Noise
       if (!playSdWav2.isPlaying()) playFile(playSdWav2, 'D', "3", 1);
 
       break;
 
+    // DISTANT CHITTER
     case 3:
 
+      // Echos
+      if (timerA.update()) playFile(playSdWav1, 'E', "1", random(1,16));
+      // Chitter
       if (!playSdWav2.isPlaying()) playFile(playSdWav2, 'E', "2", 1);
 
       break;
 
+    // HUMMING
     case 4:
 
+      //////////////////////////////////////////////////////// TODO TODO TODO - Add LFO to both
+      // Loops
+      if (!playSdWav1.isPlaying()) playFile(playSdWav1, 'G', "tk", 1);
+      if (!playSdWav2.isPlaying()) playFile(playSdWav2, 'G', "tk", 2);
+
       break;
 
+    // RUMBLE
     case 5:
 
+      // Changing rumble loops
+      if (!playSdWav1.isPlaying()) playFile(playSdWav1, 'H', "1", random(1,3));
+      // Pad
+      if (!playSdWav2.isPlaying()) playFile(playSdWav2, 'H', "bz", 1);
+      // Crackle noise
+      if (!playSdWav3.isPlaying()) playFile(playSdWav3, 'H', "ns", 1);
+
       break;
 
+    // BLINGS
     case 6:
+
+      int blings_notes[4];
+      getUniqueRandoms(blings_notes, 4, 10);
+
+      if (timerA.update(result)) {
+        if (result == 0) playFile(playSdWav1, 'B', "1", blings_base + (blings_mult * blings_notes[0]));
+        if (result == 1) playFile(playSdWav2, 'B', "1", blings_base + (blings_mult * blings_notes[1]));
+        if (result == 2) playFile(playSdWav3, 'B', "1", blings_base + (blings_mult * blings_notes[2]));
+        if (result == 3) playFile(playSdWav4, 'B', "1", blings_base + (blings_mult * blings_notes[3]));
+      }
 
       break;
 
@@ -446,12 +531,12 @@ void setup() {
   delay1.delay(2, 2400);
 
   echoMixer.gain(0, 1);
-  echoMixer.gain(1, 0.5);
-  echoMixer.gain(2, 0.25);
-  echoMixer.gain(3, 0.125);
+  echoMixer.gain(1, 0);
+  echoMixer.gain(2, 0);
+  echoMixer.gain(3, 0);
 
   reverbMix.gain(0, 1);
-  reverbMix.gain(1, 0.5);
+  reverbMix.gain(1, 0);
   reverb1.roomsize(0.99);
   reverb1.damping(0.4);
 
@@ -488,7 +573,7 @@ void loop() {
   handleChannelPlayback(chan);
 
   
-  /*if (millis() - lastDebugPrint > 1000) {
+  if (millis() - lastDebugPrint > 1000) {
     Serial.print("Current Mem: ");
     Serial.println(AudioMemoryUsage());
     Serial.print("Memory: ");
@@ -502,7 +587,7 @@ void loop() {
     lastDebugPrint = millis();
 
     
-    }*/
+    }
   
 
 }
