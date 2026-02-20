@@ -107,15 +107,16 @@ Step seqRadio1[] =    { {1100,  1100,  1, 1, 0, {}},   // D - Radio mast words
                         {1100,  1100,  2, 2, 0, {}},
                         {1100,  1100,  3, 3, 0, {}}, 
                         {6000,  8000,  0, 0, 0, {}}};
+Step seqRadio2[] =    { {10000, 30000, 0, 0, 0, {}} }; // D - Beep
 
 Step seqChitter1[] =  { {9000,  17000, 0, 0, 0, {}} };  // E - Echos for the chitter
 
-Step seqBlings1[] =   { {100,   400,   0, 0, 0, {}},    // B - Blings
+Step seqBlings1[] =   { {6000,  9000,  0, 0, 0, {}},    // B - Blings
                         {100,   400,   1, 1, 0, {}},
                         {100,   400,   2, 2, 0, {}},
                         {100,   400,   3, 3, 0, {}},
-                        {6000,  9000,  4, 4, 0, {}}};
-Step seqBlingsBase[] ={ {15000, 50000, 0, 0, 0, {}} };
+                        {100,   400,   4, 4, 0, {}}};
+Step seqBlingsBase[] ={ {15000, 50000, 0, 0, 0, {}} };  // B - Base change
 
 
 // ######## FUNCTIONS & CLASSES ########
@@ -265,8 +266,9 @@ void handleChannelPlayback(int ch) {
   // 1. TRIGGER OR RE-TRIGGER TRANSITION
   // If the physical switch (ch) is different from our current target (pending_chan)
   if (ch != pending_chan) {
-    stopAll();
+
     reverbMix.gain(1, 0);
+    stopAll();
     
     // Optional: Re-trigger transition sound
     playFile(playSdWav4, 'D', "4", 1); 
@@ -332,6 +334,8 @@ void setupChannelSpecifics(int ch) {
       // Set timers
       timerA.setSequence(seqRadio1, 6);
       timerA.start();
+      timerB.setSequence(seqRadio2, 1);
+      timerB.start();
       break;
 
     // DISTANT CHITTER
@@ -365,7 +369,7 @@ void setupChannelSpecifics(int ch) {
       compression = 0;
       // Set timers
       timerA.setSequence(seqBlings1, 5);
-      timerA.start();
+      timerA.start(true);
       timerB.setSequence(seqBlingsBase, 1);
       timerB.start();
       break;
@@ -408,7 +412,7 @@ void runActiveChannelLogic(int ch) {
       if (rms1.available()) {
         float last_rms = rms1.read();
         //float comp_mult = 5.0;
-        if (last_rms > compression) compression = (compression + last_rms*1.5) / 2;
+        if (last_rms > compression) compression = (compression + last_rms) / 2;
         if (last_rms <= compression) compression -= 0.001;
         /*if (millis() % 10 == 1) {
           Serial.print(last_rms);
@@ -467,7 +471,6 @@ void runActiveChannelLogic(int ch) {
     case 6:
 
       if (timerA.update(result)) {
-        
         if (result == 0) playFile(playSdWav1, 'B', "1", blings_base + (blings_mult * blings_notes[0]));
         if (result == 1) playFile(playSdWav2, 'B', "1", blings_base + (blings_mult * blings_notes[1]));
         if (result == 2) playFile(playSdWav3, 'B', "1", blings_base + (blings_mult * blings_notes[2]));
@@ -478,7 +481,7 @@ void runActiveChannelLogic(int ch) {
         }
       }
 
-      if (timerB.update()) blings_base = random(0,8);
+      if (timerB.update()) blings_base = random(1,8);
 
       break;
 
@@ -497,6 +500,8 @@ unsigned long lastDebugPrint = 0;
 
 void setup() {
   Serial.begin(9600);
+
+  randomSeed(analogRead(0)); // Seed the RNG
 
   timerA.start();
   timerB.start();
