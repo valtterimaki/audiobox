@@ -198,6 +198,62 @@ UniversalSequencer timerB(seqDefault, 1);
 UniversalSequencer timerC(seqDefault, 1);
 UniversalSequencer transitionTimer(seqDefault, 1);
 
+// Random movement generator
+class Drifter {
+  private:
+    float pos;
+    float vel;
+    float maxSpeed;   // The maximum velocity (top speed)
+    float stepSize;   // The smoothness (acceleration/jitter)
+
+  public:
+    // speed: max velocity (e.g., 0.05)
+    // smoothness: acceleration per tick (e.g., 0.01 for fluid, 0.1 for erratic)
+    Drifter(float startPos, float speed, float smoothness) {
+      pos = startPos;
+      maxSpeed = speed;
+      stepSize = smoothness;
+      vel = 0;
+    }
+
+    void startAtRandom() {
+      pos = pos = random(0, 1001) / 1000.0; 
+    }
+
+    void startAtOne() {
+      pos = 1.0;
+    }
+    
+    float update() {
+      // 1. Apply Jitter: This is where 'smoothness' is used.
+      // Small stepSize = slow velocity changes (smooth curves).
+      // Large stepSize = rapid velocity changes (erratic/noisy).
+      vel += ((float)random(1000) / 1000.0 - 0.5) * stepSize;
+      
+      // 2. Constrain Velocity: Prevent the drifter from moving too fast.
+      vel = constrain(vel, -maxSpeed, maxSpeed);
+      
+      // 3. Update Position
+      pos += vel;
+
+      // 4. Reflective Boundaries: Ensure even distribution across [0, 1]
+      if (pos <= 0) {
+        pos = -pos;
+        vel = -vel; 
+      } else if (pos >= 1.0) {
+        pos = 2.0 - pos;
+        vel = -vel;
+      }
+
+      return pos;
+    }
+
+    void setSpeed(float speed) { maxSpeed = speed; }
+    void setSmoothness(float smoothness) { stepSize = smoothness; }
+};
+
+Drifter noiseLFO1(1, 0.02, 0.01); 
+Drifter noiseLFO2(1, 0.015, 0.01); 
 
 void stopAll() {
   playSdWav1.stop();
@@ -353,6 +409,8 @@ void setupChannelSpecifics(int ch) {
       // Set effects
       reverbMix.gain(1, 0);
       compression = 0;
+      noiseLFO1.startAtRandom();
+      noiseLFO2.startAtRandom();
       break;
 
     // RUMBLE
@@ -448,7 +506,7 @@ void runActiveChannelLogic(int ch) {
     // HUMMING
     case 4:
 
-      //////////////////////////////////////////////////////// TODO TODO TODO - Add LFO to both
+      wavMixer.gain(0, noiseLFO1.update());
       // Loops
       playLoop(playSdWav1, 1, 'G', "tk", 1);
       playLoop(playSdWav2, 2, 'G', "tk", 2);
