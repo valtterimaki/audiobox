@@ -86,6 +86,10 @@ int blings_base = 1;
 int blings_mult = 7;
 int blings_notes[5];
 
+// Track last trigger time for playSdWav1 through playSdWav5
+uint32_t trackCooldowns[5] = {0, 0, 0, 0, 0};
+const uint32_t GUARD_TIME = 200; // Minimum ms between re-triggers
+
 //######## TIMER SEQUENCES ########
 
 Step seqDefault[] =   { {500,  500,  0, 0, 0, {}} }; // Simple one second timer loop
@@ -199,6 +203,7 @@ void stopAll() {
   playSdWav2.stop();
   playSdWav3.stop();
   playSdWav4.stop();
+  for(int i=0; i<5; i++) trackCooldowns[i] = 0; // Reset guards
   delay(5);
 }
 
@@ -242,7 +247,18 @@ void playFile(AudioPlayWAVstereo &track, char bank, const char* trackname, int i
   } else {
     Serial.printf("ERROR: couldn't play %s\n", filenameBuffer);
   }
+}
 
+void playLoop(AudioPlayWAVstereo &track, int id, char bank, const char* trackname, int index) {
+  // Ensure ID is within bounds (1-5)
+  if (id < 1 || id > 5) return;
+  int idx = id - 1;
+
+  // Only proceed if the track is not playing AND the cooldown has passed
+  if (!track.isPlaying() && (millis() - trackCooldowns[idx] > GUARD_TIME)) {
+    playFile(track, bank, trackname, index);
+    trackCooldowns[idx] = millis(); // Update the specific guard timer
+  }
 }
 
 void handleChannelPlayback(int ch) {
@@ -409,7 +425,9 @@ void runActiveChannelLogic(int ch) {
         if (result == 3) playFile(playSdWav1, 'D', "1", random(11,12));
       }
       // Noise
-      if (!playSdWav2.isPlaying()) playFile(playSdWav2, 'D', "3", 1);
+      playLoop(playSdWav2, 2, 'D', "3", 1);
+      // Beep
+      if (timerB.update()) playFile(playSdWav3, 'D', "4", 1);
 
       break;
 
@@ -419,7 +437,7 @@ void runActiveChannelLogic(int ch) {
       // Echos
       if (timerA.update()) playFile(playSdWav1, 'E', "1", random(1,16));
       // Chitter
-      if (!playSdWav2.isPlaying()) playFile(playSdWav2, 'E', "2", 1);
+      playLoop(playSdWav2, 2, 'E', "2", 1);
 
       break;
 
@@ -428,8 +446,8 @@ void runActiveChannelLogic(int ch) {
 
       //////////////////////////////////////////////////////// TODO TODO TODO - Add LFO to both
       // Loops
-      if (!playSdWav1.isPlaying()) playFile(playSdWav1, 'G', "tk", 1);
-      if (!playSdWav2.isPlaying()) playFile(playSdWav2, 'G', "tk", 2);
+      playLoop(playSdWav1, 1, 'G', "tk", 1);
+      playLoop(playSdWav2, 2, 'G', "tk", 2);
 
       break;
 
@@ -437,11 +455,11 @@ void runActiveChannelLogic(int ch) {
     case 5:
 
       // Changing rumble loops
-      if (!playSdWav1.isPlaying()) playFile(playSdWav1, 'H', "1", random(1,3));
+      playLoop(playSdWav1, 1, 'H', "1", random(1,3));
       // Pad
-      if (!playSdWav2.isPlaying()) playFile(playSdWav2, 'H', "bz", 1);
+      playLoop(playSdWav2, 2, 'H', "bz", 1);
       // Crackle noise
-      if (!playSdWav3.isPlaying()) playFile(playSdWav3, 'H', "ns", 1);
+      playLoop(playSdWav3, 3, 'H', "ns", 1);
 
       break;
 
