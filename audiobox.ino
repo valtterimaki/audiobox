@@ -542,10 +542,16 @@ void loop() {
   }
 
   // Volume control
-  float vol = analogRead(15);
-  vol = vol / 1024;
+  // 1. Read the raw value (0 - 1023)
+  float rawVal = analogRead(15);
+  // 2. Normalize to 0.0 - 1.0
+  float normalizedVol = rawVal / 1023.0;
+  // 3. Apply the curve
+  float curvedVol = normalizedVol * normalizedVol;
+  // 4. Apply your max volume multiplier
+  float finalGain = curvedVol;
+  amp1.gain(finalGain * (1 - compression * 3));
   //Serial.println(vol);
-  amp1.gain(vol * (1 - compression*3));
 
   // Actual playback
   handleChannelPlayback(chan);
