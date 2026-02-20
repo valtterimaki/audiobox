@@ -497,6 +497,10 @@ void setup() {
   // pullup resistors
   sgtl5000_1.enable();
   sgtl5000_1.volume(0.1);
+  sgtl5000_1.lineOutLevel(31);
+  sgtl5000_1.audioPostProcessorEnable();
+  sgtl5000_1.enhanceBassEnable();
+  sgtl5000_1.enhanceBass(0.7, 1, 1, 1);
 
   playSdWav1.createBuffer(2048,AudioBuffer::inHeap);
   playSdWav2.createBuffer(2048,AudioBuffer::inHeap);
