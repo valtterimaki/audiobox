@@ -59,7 +59,7 @@ AudioControlSGTL5000     sgtl5000_1;
 
 struct Jump {
   uint8_t targetStep;
-  uint8_t probability; // 0-100%
+  uint8_t probability;
 };
 
 struct Step {
@@ -73,7 +73,7 @@ struct Step {
 
 //######## GLOBAL VARIABLES ########
 
-// Pins for the 8-way switch (TODO: reorder later)
+// Pins for the 8-way switch
 const int switchPins[8] = {25, 26, 27, 28, 29, 30, 31, 32};
 
 // Channel state trackers
@@ -96,7 +96,7 @@ const uint32_t GUARD_TIME = 200; // Minimum ms between re-triggers
 
 //######## TIMER SEQUENCES ########
 
-Step seqDefault[] =   { {500,  500,  0, 0, 0, {}} }; // Simple one second timer loop
+Step seqDefault[]     = { {500,  500,  0, 0, 0, {}} };              // Simple one second timer loop
 
 Step seqPiano1[]      = { {10000, 11000, 0, 0, 0, {}} };          // A - Base piano
 Step seqPiano2[]      = { {10000, 20000, 0, 0, 0, {}} };          // A - Additional piano 1
@@ -208,6 +208,7 @@ UniversalSequencer timerC(seqDefault, 1);
 UniversalSequencer transitionTimer(seqDefault, 1);
 
 // Random movement generator
+
 class Drifter {
   private:
     float pos;
@@ -273,9 +274,13 @@ class Drifter {
     void setSmoothness(float smoothness) { stepSize = smoothness; }
 };
 
+// Initiate the random movers (lfo's basically)
+
 Drifter noiseLFO1(1, 0.01, 0.01, 50); 
 Drifter noiseLFO2(1, 0.005, 0.01, 50); 
 Drifter noiseLFO3(1, 0.007, 0.01, 50); 
+
+// Function to stop everything
 
 void stopAll() {
   Serial.println("--- SYSTEM RESET (stopAll) ---");
@@ -291,6 +296,8 @@ void stopAll() {
   for(int i=0; i<5; i++) trackCooldowns[i] = 0; // Reset guards
   delay(5);
 }
+
+// Function to get a set of non repeating random ints
 
 void getUniqueRandoms(int* output, int numToPick, int maxRange) {
   // 1. Create a pool of all possible values (0 to maxRange-1)
@@ -314,6 +321,8 @@ void getUniqueRandoms(int* output, int numToPick, int maxRange) {
   }
 }
 
+// Sunction to play files using the wav file naming format
+
 void playFile(AudioPlayWAVstereo &track, char bank, const char* trackname, int index) {
 
   // 1. Calculate buffer size: 1 (char) + strlen(descriptor) + ~3 (digits) + 5 (.WAV) + 1 (null)
@@ -334,6 +343,8 @@ void playFile(AudioPlayWAVstereo &track, char bank, const char* trackname, int i
   }
 }
 
+// Function to loop a file, with some SD card read guards (possibly redundant)
+
 void playLoop(AudioPlayWAVstereo &track, int id, char bank, const char* trackname, int index) {
   // Ensure ID is within bounds (1-5)
   if (id < 1 || id > 5) return;
@@ -345,6 +356,8 @@ void playLoop(AudioPlayWAVstereo &track, int id, char bank, const char* tracknam
     trackCooldowns[idx] = millis(); // Update the specific guard timer
   }
 }
+
+// Function to handle playback whenever channel is changed, with an inbuilt feature to play a short transition sound
 
 void handleChannelPlayback(int ch) {
   // 1. TRIGGER OR RE-TRIGGER TRANSITION
@@ -392,6 +405,8 @@ void handleChannelPlayback(int ch) {
   // 3. RUN ACTIVE CHANNEL LOGIC
   runActiveChannelLogic(prev_chan);
 }
+
+// Setup each channel settings
 
 void setupChannelSpecifics(int ch) {
 
@@ -493,6 +508,8 @@ void setupChannelSpecifics(int ch) {
   }
 }
 
+// Actual channel playback logic 
+
 void runActiveChannelLogic(int ch) {
   
   switch (ch) {
@@ -500,7 +517,6 @@ void runActiveChannelLogic(int ch) {
     // THE PIANO
     case 0:
     {
-
       // Piano rhythm, steady intervals
       if (timerA.update()) playFile(playSdWav1, 'A', "1", random(1,23));
       // Piano echos, slightly random intervals
@@ -522,6 +538,7 @@ void runActiveChannelLogic(int ch) {
     // THE RADIO MAST
     case 2:
     {
+      // Compressor (not used anywhere else, componentize if needed)
       if (rms1.available()) {
         float last_rms = rms1.read();
         //float comp_mult = 5.0;
@@ -533,7 +550,6 @@ void runActiveChannelLogic(int ch) {
           Serial.println(compression);
         }*/
       }
-   
       // Words
       int result;
       if (timerA.update(result)) {
@@ -625,7 +641,7 @@ void runActiveChannelLogic(int ch) {
 }
 
 
-// FOR DEBUG
+// FOR DEBUG (see the end of the loop() )
 unsigned long lastDebugPrint = 0;
 
 
@@ -644,13 +660,8 @@ void setup() {
     pinMode(switchPins[i], INPUT_PULLUP); // enables internal pull-up resistor
   }
 
-  // Audio connections require memory to work.  For more
-  // detailed information, see the MemoryAndCpuUsage example
   AudioMemory(80);
 
-  // Comment these out if not using the audio adaptor board.
-  // This may wait forever if the SDA & SCL pins lack
-  // pullup resistors
   sgtl5000_1.enable();
   sgtl5000_1.volume(0.1);
   sgtl5000_1.lineOutLevel(31);
@@ -658,6 +669,7 @@ void setup() {
   sgtl5000_1.enhanceBassEnable();
   sgtl5000_1.enhanceBass(0.7, 1, 1, 1);
 
+  // Needs to be high to prevent hangups and stutters.
   // 8192 bytes is 8KB per track. Total 40KB for 5 tracks. 
   // The Teensy 4.1 has plenty of RAM, so we can afford this.
   playSdWav1.createBuffer(8192, AudioBuffer::inHeap);
@@ -679,6 +691,7 @@ void setup() {
   reverb1.roomsize(0.99);
   reverb1.damping(0.7);
 
+  // This needs to be done initally one time
   getUniqueRandoms(blings_notes, 5, 9);
 
   SPI.setMOSI(SDCARD_MOSI_PIN);
@@ -691,9 +704,7 @@ void setup() {
   }
 }
 
-
 // ######## MAIN LOOP ########
-
 
 void loop() {
 
@@ -709,7 +720,7 @@ void loop() {
   float rawVal = analogRead(15);
   // 2. Normalize to 0.0 - 1.0
   float normalizedVol = rawVal / 1023.0;
-  // 3. Apply the curve
+  // 3. Apply the curve to make volume knob feel more natural
   float curvedVol = normalizedVol * normalizedVol;
   // 4. Apply your max volume multiplier
   float finalGain = curvedVol;
@@ -719,7 +730,6 @@ void loop() {
   // Actual playback
   handleChannelPlayback(chan);
 
-  
   /*if (millis() - lastDebugPrint > 1000) {
     Serial.print("Current Mem: ");
     Serial.println(AudioMemoryUsage());
@@ -734,5 +744,4 @@ void loop() {
     lastDebugPrint = millis();
   }*/
   
-
 }
