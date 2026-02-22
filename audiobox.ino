@@ -4,36 +4,40 @@
 #include <SD.h>
 #include <SerialFlash.h>
 
-// AUDIO ROUTINGS
+// ######## AUDIO ROUTINGS ########
 
 AudioPlayWAVstereo       playSdWav1;
 AudioPlayWAVstereo       playSdWav2;
 AudioPlayWAVstereo       playSdWav3;
 AudioPlayWAVstereo       playSdWav4;
 AudioPlayWAVstereo       playSdWav5;
+AudioFilterStateVariable filter1;        //xy=489,560
 AudioMixer4              wavMixer2;         //xy=512,655
 AudioMixer4              wavMixer;       //xy=696,497
 AudioEffectFreeverb      reverb1;        //xy=1290,544
 AudioMixer4              reverbMix;      //xy=1464,513
+AudioAmplifier           reverbAmp;           //xy=1047,571
 AudioAmplifier           amp1;           //xy=1629,507
 AudioAnalyzeRMS          rms1;           //xy=1629,572
 AudioOutputI2S           i2s1;           //xy=1781,504
 AudioConnection          patchCord1(playSdWav4, 0, wavMixer2, 0);
 AudioConnection          patchCord2(playSdWav5, 0, wavMixer2, 1);
-AudioConnection          patchCord3(playSdWav3, 0, wavMixer, 2);
+AudioConnection          patchCord3(playSdWav3, 0, filter1, 0);
 AudioConnection          patchCord4(playSdWav2, 0, wavMixer, 1);
 AudioConnection          patchCord5(playSdWav1, 0, wavMixer, 0);
-AudioConnection          patchCord6(wavMixer2, 0, wavMixer, 3);
-AudioConnection          patchCord7(wavMixer, 0, reverbMix, 0);
-AudioConnection          patchCord8(wavMixer, reverb1);
-AudioConnection          patchCord9(reverb1, 0, reverbMix, 1);
-AudioConnection          patchCord10(reverbMix, amp1);
-AudioConnection          patchCord11(reverbMix, rms1);
-AudioConnection          patchCord12(amp1, 0, i2s1, 0);
+AudioConnection          patchCord6(filter1, 0, wavMixer, 2);
+AudioConnection          patchCord7(wavMixer2, 0, wavMixer, 3);
+AudioConnection          patchCord8(wavMixer, 0, reverbMix, 0);
+AudioConnection          patchCord9(wavMixer, reverbAmp);
+AudioConnection          patchCord10(reverbAmp, reverb1);
+AudioConnection          patchCord11(reverb1, 0, reverbMix, 1);
+AudioConnection          patchCord12(reverbMix, amp1);
+AudioConnection          patchCord13(reverbMix, rms1);
+AudioConnection          patchCord14(amp1, 0, i2s1, 0);
 
 AudioControlSGTL5000     sgtl5000_1;
 
-// PINS
+// ######## PINS ########
 
 // Use these with the Teensy Audio Shield
 //#define SDCARD_CS_PIN    10
@@ -94,30 +98,32 @@ const uint32_t GUARD_TIME = 200; // Minimum ms between re-triggers
 
 Step seqDefault[] =   { {500,  500,  0, 0, 0, {}} }; // Simple one second timer loop
 
-Step seqPiano1[] =    { {10000, 11000, 0, 0, 0, {}} }; // A - Base piano
-Step seqPiano2[] =    { {10000, 20000, 0, 0, 0, {}} }; // A - Additional piano 1
-Step seqPiano3[] =    { {15000, 22000, 0, 0, 0, {}} }; // A - Additional piano 2
+Step seqPiano1[]      = { {10000, 11000, 0, 0, 0, {}} };          // A - Base piano
+Step seqPiano2[]      = { {10000, 20000, 0, 0, 0, {}} };          // A - Additional piano 1
+Step seqPiano3[]      = { {15000, 22000, 0, 0, 0, {}} };          // A - Additional piano 2
 
-Step seqWails1[] =    { {11000, 13000, 0, 0, 0, {}} }; // C - Main echos
-Step seqWails2[] =    { {15000, 22000, 0, 0, 0, {}} }; // C - Wails
+Step seqWails1[]      = { {11000, 13000, 0, 0, 0, {}} };          // C - Main echos
+Step seqWails2[]      = { {15000, 22000, 0, 0, 0, {}} };          // C - Wails
 
-Step seqRadio1[] =    { {1100,  1100,  1, 1, 0, {}},   // D - Radio mast words
-                        {1100,  1100,  1, 1, 0, {}},
-                        {1100,  1200,  1, 1, 3, {{5, 70}, {3, 30}, {4, 10}}},
-                        {1100,  1100,  2, 2, 0, {}},
-                        {1100,  1100,  3, 3, 0, {}}, 
-                        {6000,  8000,  0, 0, 0, {}}};
-Step seqRadio2[] =    { {10000, 30000, 0, 0, 0, {}} }; // D - Beep
+Step seqRadio1[]      = { {1100,  1100,  1, 1, 0, {}},            // D - Radio mast words
+                          {1100,  1100,  1, 1, 0, {}},
+                          {1100,  1200,  1, 1, 3, {{5, 70}, {3, 30}, {4, 10}}},
+                          {1100,  1100,  2, 2, 1, {{5, 100}}},
+                          {1100,  1100,  3, 3, 0, {}}, 
+                          {6000,  18000, 0, 0, 0, {}}};
+Step seqRadio2[]      = { {10000, 30000, 0, 0, 0, {}} };          // D - Beep
 
-Step seqChitter1[] =  { {9000,  17000, 0, 0, 0, {}} };  // E - Echos for the chitter
+Step seqChitter1[]    = { {9000,  17000, 0, 0, 0, {}} };          // E - Echos for the chitter
 
-Step seqBlings1[] =   { {6000,  9000,  0, 0, 0, {}},    // B - Blings
-                        {100,   400,   1, 1, 0, {}},
-                        {100,   400,   2, 2, 0, {}},
-                        {100,   400,   3, 3, 0, {}},
-                        {100,   400,   4, 4, 0, {}}};
-Step seqBlingsBase[] ={ {15000, 50000, 0, 0, 0, {}} };  // B - Base change
+Step seqBlings1[]     = { {6000,  9000,  0, 0, 0, {}},            // B - Blings
+                          {100,   400,   1, 1, 0, {}},
+                          {100,   400,   2, 2, 0, {}},
+                          {100,   400,   3, 3, 0, {}},
+                          {100,   400,   4, 4, 0, {}}};
+Step seqBlingsBase[]  = { {15000, 50000, 0, 0, 0, {}} };          // B - Base change
 
+Step seqOpera1[]      = { {7500,  20000, 0, 0, 1, {{0, 70}}},     // J - Vocals
+                          {7500,  9000,  0, 0, 1, {{1, 50}}} }; 
 
 // ######## FUNCTIONS & CLASSES ########
 
@@ -174,7 +180,10 @@ class UniversalSequencer {
 
     bool update(int &outputValue) {
       if (!_running) return false;
-      if (millis() - _lastMillis >= _currentWaitTime) {
+      
+      uint32_t elapsed = millis() - _lastMillis;
+      if (elapsed >= _currentWaitTime) {
+        //Serial.printf("Timer Fired! Wait was: %d, Elapsed: %d\n", _currentWaitTime, elapsed);
         _lastMillis = millis();
         Step s = _steps[_currentIndex];
         outputValue = (s.minVal == s.maxVal) ? s.minVal : random(s.minVal, s.maxVal + 1);
@@ -203,63 +212,82 @@ class Drifter {
   private:
     float pos;
     float vel;
-    float maxSpeed;   // The maximum velocity (top speed)
-    float stepSize;   // The smoothness (acceleration/jitter)
+    float maxSpeed;
+    float stepSize;
+    unsigned long interval;     // Time between updates in milliseconds
+    unsigned long lastUpdate;   // Timestamp of the last calculation
 
   public:
-    // speed: max velocity (e.g., 0.05)
-    // smoothness: acceleration per tick (e.g., 0.01 for fluid, 0.1 for erratic)
-    Drifter(float startPos, float speed, float smoothness) {
+    // interval: time in ms between updates (e.g., 20 for smooth, 100 for slow)
+    // speed: max velocity per update
+    // smoothness: acceleration per update
+    Drifter(float startPos, float speed, float smoothness, unsigned long updateInterval) {
       pos = startPos;
       maxSpeed = speed;
       stepSize = smoothness;
+      interval = updateInterval;
       vel = 0;
+      lastUpdate = 0;
     }
 
     void startAtRandom() {
-      pos = pos = random(0, 1001) / 1000.0; 
+      pos = random(0, 1001) / 1000.0; 
     }
 
-    void startAtOne() {
-      pos = 1.0;
+    void startAt(float startvalue) {
+      pos = startvalue;
     }
-    
+
     float update() {
-      // 1. Apply Jitter: This is where 'smoothness' is used.
-      // Small stepSize = slow velocity changes (smooth curves).
-      // Large stepSize = rapid velocity changes (erratic/noisy).
-      vel += ((float)random(1000) / 1000.0 - 0.5) * stepSize;
-      
-      // 2. Constrain Velocity: Prevent the drifter from moving too fast.
-      vel = constrain(vel, -maxSpeed, maxSpeed);
-      
-      // 3. Update Position
-      pos += vel;
+      unsigned long currentMillis = millis();
 
-      // 4. Reflective Boundaries: Ensure even distribution across [0, 1]
-      if (pos <= 0) {
-        pos = -pos;
-        vel = -vel; 
-      } else if (pos >= 1.0) {
-        pos = 2.0 - pos;
-        vel = -vel;
+      // Only calculate new values if the interval has passed
+      if (currentMillis - lastUpdate >= interval) {
+        lastUpdate = currentMillis;
+
+        // Apply Jitter (Acceleration)
+        vel += ((float)random(1001) / 1000.0 - 0.5) * stepSize;
+        vel = constrain(vel, -maxSpeed, maxSpeed);
+        
+        // Update Position
+        pos += vel;
+        
+        // Debug
+        //Serial.println(pos);
+
+        // Reflective Boundaries
+        if (pos <= 0) {
+          pos = -pos;
+          vel = -vel; 
+        } else if (pos >= 1.0) {
+          pos = 2.0 - pos;
+          vel = -vel;
+        }
       }
 
-      return pos;
+      return pos; // Returns the current position every time it's called
     }
 
+    void setInterval(unsigned long ms) { interval = ms; }
     void setSpeed(float speed) { maxSpeed = speed; }
     void setSmoothness(float smoothness) { stepSize = smoothness; }
 };
 
-Drifter noiseLFO1(1, 0.02, 0.01); 
-Drifter noiseLFO2(1, 0.015, 0.01); 
+Drifter noiseLFO1(1, 0.01, 0.01, 50); 
+Drifter noiseLFO2(1, 0.005, 0.01, 50); 
+Drifter noiseLFO3(1, 0.007, 0.01, 50); 
 
 void stopAll() {
+  Serial.println("--- SYSTEM RESET (stopAll) ---");
   playSdWav1.stop();
   playSdWav2.stop();
   playSdWav3.stop();
   playSdWav4.stop();
+  playSdWav5.stop();
+  timerA.stop();
+  timerB.stop();
+  timerC.stop();
+
   for(int i=0; i<5; i++) trackCooldowns[i] = 0; // Reset guards
   delay(5);
 }
@@ -322,12 +350,21 @@ void handleChannelPlayback(int ch) {
   // 1. TRIGGER OR RE-TRIGGER TRANSITION
   // If the physical switch (ch) is different from our current target (pending_chan)
   if (ch != pending_chan) {
-
+    wavMixer.gain(0, 1);
+    wavMixer.gain(1, 1);
+    wavMixer.gain(2, 1);
+    wavMixer.gain(3, 1);
+    wavMixer2.gain(0, 1);
+    wavMixer2.gain(1, 1);
     reverbMix.gain(1, 0);
+    reverbAmp.gain(0);
+    reverb1.roomsize(0.0);
     stopAll();
     
     // Optional: Re-trigger transition sound
-    playFile(playSdWav4, 'D', "4", 1); 
+    //wavMixer.gain(0, 0.3);
+    //playFile(playSdWav1, 'X', "1", random(1,15));
+    playFile(playSdWav1, 'X', "N", 1); 
     
     pending_chan = ch;      // Update our destination to the newest switch position
     is_transitioning = true;
@@ -341,8 +378,12 @@ void handleChannelPlayback(int ch) {
   if (is_transitioning) {
     if (transitionTimer.update()) {
       is_transitioning = false;
+      playSdWav1.stop();
+      wavMixer.gain(0, 1);
+      reverbAmp.gain(1);
       prev_chan = pending_chan; // Confirm the target as the active channel
       setupChannelSpecifics(prev_chan);
+      reverb1.roomsize(0.99);
       Serial.printf("Transition finalized. Active: %d\n", prev_chan);
     }
     return; // Block channel logic until timer expires
@@ -410,7 +451,6 @@ void setupChannelSpecifics(int ch) {
       reverbMix.gain(1, 0);
       compression = 0;
       noiseLFO1.startAtRandom();
-      noiseLFO2.startAtRandom();
       break;
 
     // RUMBLE
@@ -423,6 +463,10 @@ void setupChannelSpecifics(int ch) {
     // BLINGS
     case 6:
       // Set effects
+      wavMixer.gain(0, 0.75);
+      wavMixer.gain(1, 0.75);
+      wavMixer.gain(2, 0.75);
+      wavMixer.gain(3, 0.75);
       reverbMix.gain(1, 0.4);
       compression = 0;
       // Set timers
@@ -433,6 +477,16 @@ void setupChannelSpecifics(int ch) {
       break;
 
     case 7:
+      // Set effects
+      reverbMix.gain(1, 0.4);
+      compression = 0;
+      noiseLFO1.startAtRandom();
+      noiseLFO3.startAt(0.5);
+      wavMixer.gain(0, 0.7);
+      wavMixer.gain(1, 0.7);
+      // Set timers
+      timerA.setSequence(seqOpera1, 2);
+      timerA.start();
 
       break;
 
@@ -445,28 +499,29 @@ void runActiveChannelLogic(int ch) {
 
     // THE PIANO
     case 0:
-    
+    {
+
       // Piano rhythm, steady intervals
       if (timerA.update()) playFile(playSdWav1, 'A', "1", random(1,23));
       // Piano echos, slightly random intervals
       if (timerB.update()) playFile(playSdWav2, 'A', "2", random(1,24));
       if (timerC.update()) playFile(playSdWav3, 'A', "2", random(1,24));
 
-      break;
+      } break;
 
     // THE WAILS
     case 1:
-    
+    {
       // Main echos
       if (timerA.update()) playFile(playSdWav1, 'C', "1", random(1,105));
       // Wails
       if (timerB.update()) playFile(playSdWav2, 'C', "2", random(1,45));
 
-      break;
+      } break;
 
     // THE RADIO MAST
     case 2:
-  
+    {
       if (rms1.available()) {
         float last_rms = rms1.read();
         //float comp_mult = 5.0;
@@ -491,43 +546,45 @@ void runActiveChannelLogic(int ch) {
       // Beep
       if (timerB.update()) playFile(playSdWav3, 'D', "4", 1);
 
-      break;
+      } break;
 
     // DISTANT CHITTER
     case 3:
-
+    {
       // Echos
       if (timerA.update()) playFile(playSdWav1, 'E', "1", random(1,16));
       // Chitter
       playLoop(playSdWav2, 2, 'E', "2", 1);
 
-      break;
+      } break;
 
     // HUMMING
     case 4:
-
+    {
       wavMixer.gain(0, noiseLFO1.update());
+      wavMixer.gain(1, (1 - noiseLFO1.update()));
       // Loops
-      playLoop(playSdWav1, 1, 'G', "tk", 1);
-      playLoop(playSdWav2, 2, 'G', "tk", 2);
+      playLoop(playSdWav1, 1, 'G', "1", 1);
+      playLoop(playSdWav2, 2, 'G', "2", random(1,2));
 
-      break;
+      } break;
 
     // RUMBLE
     case 5:
-
+    {
       // Changing rumble loops
-      playLoop(playSdWav1, 1, 'H', "1", random(1,3));
+      playLoop(playSdWav1, 1, 'H', "1", random(1, 3));
       // Pad
       playLoop(playSdWav2, 2, 'H', "bz", 1);
-      // Crackle noise
+      // Noise
       playLoop(playSdWav3, 3, 'H', "ns", 1);
 
-      break;
+      } break;
 
     // BLINGS
-    case 6:
-
+    case 6: 
+    {
+      int result;
       if (timerA.update(result)) {
         if (result == 0) playFile(playSdWav1, 'B', "1", blings_base + (blings_mult * blings_notes[0]));
         if (result == 1) playFile(playSdWav2, 'B', "1", blings_base + (blings_mult * blings_notes[1]));
@@ -541,11 +598,29 @@ void runActiveChannelLogic(int ch) {
 
       if (timerB.update()) blings_base = random(1,8);
 
-      break;
+      } break;
 
-    case 7:
+    // OPERA
+    case 7: 
+    {
+      // Vocals
+      float lfo1_snap = noiseLFO1.update();
+      wavMixer.gain(0, lfo1_snap);
+      wavMixer.gain(1, 1 - lfo1_snap);
+      if (timerA.update()) {
+        int opera_wav = random(1, 59);
+        playFile(playSdWav1, 'J', "1", opera_wav);
+        delay(10);
+        playFile(playSdWav2, 'J', "2", opera_wav);
+      } 
 
-      break;
+      // Chord
+      float lfo3_snap = noiseLFO3.update();
+      filter1.frequency((lfo3_snap*lfo3_snap*lfo3_snap)*1000.0 + 200.0);
+      playLoop(playSdWav3, 3, 'J', "3", random(1,4));
+      
+    } break;
+  
   }
 }
 
@@ -571,7 +646,7 @@ void setup() {
 
   // Audio connections require memory to work.  For more
   // detailed information, see the MemoryAndCpuUsage example
-  AudioMemory(1024);
+  AudioMemory(80);
 
   // Comment these out if not using the audio adaptor board.
   // This may wait forever if the SDA & SCL pins lack
@@ -583,21 +658,24 @@ void setup() {
   sgtl5000_1.enhanceBassEnable();
   sgtl5000_1.enhanceBass(0.7, 1, 1, 1);
 
-  playSdWav1.createBuffer(2048,AudioBuffer::inHeap);
-  playSdWav2.createBuffer(2048,AudioBuffer::inHeap);
-  playSdWav3.createBuffer(2048,AudioBuffer::inHeap);
-  playSdWav4.createBuffer(2048,AudioBuffer::inHeap);
-  playSdWav5.createBuffer(2048,AudioBuffer::inHeap);
+  // 8192 bytes is 8KB per track. Total 40KB for 5 tracks. 
+  // The Teensy 4.1 has plenty of RAM, so we can afford this.
+  playSdWav1.createBuffer(8192, AudioBuffer::inHeap);
+  playSdWav2.createBuffer(8192, AudioBuffer::inHeap);
+  playSdWav3.createBuffer(8192, AudioBuffer::inHeap);
+  playSdWav4.createBuffer(8192, AudioBuffer::inHeap);
+  playSdWav5.createBuffer(8192, AudioBuffer::inHeap);
 
   wavMixer.gain(0, 1);
   wavMixer.gain(1, 1);
   wavMixer.gain(2, 1);
   wavMixer.gain(3, 1);
-  wavMixer.gain(1, 1);
-  wavMixer.gain(2, 1);
+  wavMixer2.gain(0, 1);
+  wavMixer2.gain(1, 1);
 
   reverbMix.gain(0, 1);
   reverbMix.gain(1, 0);
+  reverbAmp.gain(1);
   reverb1.roomsize(0.99);
   reverb1.damping(0.7);
 
