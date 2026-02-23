@@ -321,7 +321,7 @@ void getUniqueRandoms(int* output, int numToPick, int maxRange) {
   }
 }
 
-// Sunction to play files using the wav file naming format
+// Function to play files using the wav file naming format
 
 void playFile(AudioPlayWAVstereo &track, char bank, const char* trackname, int index) {
 
@@ -420,7 +420,7 @@ void setupChannelSpecifics(int ch) {
       // Set timers
       timerA.setSequence(seqPiano1, 1);
       timerB.setSequence(seqPiano2, 1);
-      timerC.setSequence(seqPiano2, 1);
+      timerC.setSequence(seqPiano3, 1);
       timerA.start(true);
       timerB.start();
       timerC.start();
@@ -577,11 +577,12 @@ void runActiveChannelLogic(int ch) {
     // HUMMING
     case 4:
     {
-      wavMixer.gain(0, noiseLFO1.update());
-      wavMixer.gain(1, (1 - noiseLFO1.update()));
+      float lfo1_snap = noiseLFO1.update();
+      wavMixer.gain(0, lfo1_snap);
+      wavMixer.gain(1, 1.0 - lfo1_snap);
       // Loops
       playLoop(playSdWav1, 1, 'G', "1", 1);
-      playLoop(playSdWav2, 2, 'G', "2", random(1,2));
+      playLoop(playSdWav2, 2, 'G', "2", random(1,3));
 
       } break;
 
@@ -626,7 +627,6 @@ void runActiveChannelLogic(int ch) {
       if (timerA.update()) {
         int opera_wav = random(1, 59);
         playFile(playSdWav1, 'J', "1", opera_wav);
-        delay(10);
         playFile(playSdWav2, 'J', "2", opera_wav);
       } 
 
@@ -648,7 +648,7 @@ unsigned long lastDebugPrint = 0;
 // ######## SETUP ######## 
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
 
   randomSeed(analogRead(0)); // Seed the RNG
 
@@ -724,7 +724,7 @@ void loop() {
   float curvedVol = normalizedVol * normalizedVol;
   // 4. Apply your max volume multiplier
   float finalGain = curvedVol;
-  amp1.gain(finalGain * (1 - compression * 3));
+  amp1.gain(max(0.0f, finalGain * (1.0f - compression * 3.0f)));
   //Serial.println(vol);
 
   // Actual playback
