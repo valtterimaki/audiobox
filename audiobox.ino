@@ -82,8 +82,7 @@ int prev_chan = -1;
 int pending_chan = -1;
 bool is_transitioning = false;
 
-// Compression
-float compression;
+// Compression (managed by the Compressor class below)
 
 // Blings controls
 int blings_base = 1;
@@ -280,6 +279,46 @@ Drifter noiseLFO1(1, 0.01, 0.01, 50);
 Drifter noiseLFO2(1, 0.005, 0.01, 50); 
 Drifter noiseLFO3(1, 0.007, 0.01, 50); 
 
+// RMS-based compressor — tracks signal level and returns a gain multiplier
+
+class Compressor {
+  private:
+    float _level;
+    unsigned long _lastTime;
+    float _threshold;
+    float _attackTime;
+    float _releaseTime;
+    float _ratio;
+
+  public:
+    // threshold: RMS level that triggers compression (0.0-1.0)
+    // attackTime: seconds to reach full compression on a loud hit
+    // releaseTime: seconds to recover after signal drops
+    // ratio: gain reduction multiplier (higher = more ducking)
+    Compressor(float threshold = 0.08f, float attackTime = 0.015f, float releaseTime = 0.4f, float ratio = 3.0f)
+      : _level(0), _lastTime(0), _threshold(threshold),
+        _attackTime(attackTime), _releaseTime(releaseTime), _ratio(ratio) {}
+
+    void update(float rms) {
+      float dt = (millis() - _lastTime) / 1000.0f;
+      _lastTime = millis();
+      if (rms > _threshold) {
+        _level += (1.0f - exp(-dt / _attackTime)) * (rms - _level);
+      } else {
+        _level *= exp(-dt / _releaseTime);
+      }
+    }
+
+    // Returns a 0.0-1.0 multiplier to apply to output gain
+    float gainMultiplier() {
+      return max(0.0f, 1.0f - _level * _ratio);
+    }
+
+    void reset() { _level = 0; }
+};
+
+Compressor compressor;
+
 // Function to stop everything
 
 void stopAll() {
@@ -416,7 +455,7 @@ void setupChannelSpecifics(int ch) {
     case 0:
       //Set effects
       reverbMix.gain(1, 0);
-      compression = 0;
+      compressor.reset();
       // Set timers
       timerA.setSequence(seqPiano1, 1);
       timerB.setSequence(seqPiano2, 1);
@@ -430,7 +469,7 @@ void setupChannelSpecifics(int ch) {
     case 1:
       // Set effects
       reverbMix.gain(1, 0);
-      compression = 0;
+      compressor.reset();
       // Set timers
       timerA.setSequence(seqWails1, 1);
       timerB.setSequence(seqWails2, 1);
@@ -442,7 +481,7 @@ void setupChannelSpecifics(int ch) {
     case 2:
       // Set effects
       reverbMix.gain(1, 0);
-      compression = 0;
+      compressor.reset();
       // Set timers
       timerA.setSequence(seqRadio1, 6);
       timerA.start();
@@ -454,7 +493,7 @@ void setupChannelSpecifics(int ch) {
     case 3:
       // Set effects
       reverbMix.gain(1, 0);
-      compression = 0;
+      compressor.reset();
       // Set timers
       timerA.setSequence(seqChitter1, 1);
       timerA.start();
@@ -464,7 +503,7 @@ void setupChannelSpecifics(int ch) {
     case 4:
       // Set effects
       reverbMix.gain(1, 0);
-      compression = 0;
+      compressor.reset();
       noiseLFO1.startAtRandom();
       break;
 
@@ -472,7 +511,7 @@ void setupChannelSpecifics(int ch) {
     case 5:
       // Set effects
       reverbMix.gain(1, 0);
-      compression = 0;
+      compressor.reset();
       break;
 
     // BLINGS
@@ -483,7 +522,7 @@ void setupChannelSpecifics(int ch) {
       wavMixer.gain(2, 0.75);
       wavMixer.gain(3, 0.75);
       reverbMix.gain(1, 0.4);
-      compression = 0;
+      compressor.reset();
       // Set timers
       timerA.setSequence(seqBlings1, 5);
       timerA.start(true);
@@ -494,7 +533,7 @@ void setupChannelSpecifics(int ch) {
     case 7:
       // Set effects
       reverbMix.gain(1, 0.4);
-      compression = 0;
+      compressor.reset();
       noiseLFO1.startAtRandom();
       noiseLFO3.startAt(0.5);
       wavMixer.gain(0, 0.7);
@@ -538,18 +577,7 @@ void runActiveChannelLogic(int ch) {
     // THE RADIO MAST
     case 2:
     {
-      // Compressor (not used anywhere else, componentize if needed)
-      if (rms1.available()) {
-        float last_rms = rms1.read();
-        //float comp_mult = 5.0;
-        if (last_rms > compression) compression = (compression + last_rms) / 2;
-        if (last_rms <= compression) compression -= 0.001;
-        /*if (millis() % 10 == 1) {
-          Serial.print(last_rms);
-          Serial.print(" + ");
-          Serial.println(compression);
-        }*/
-      }
+      if (rms1.available()) compressor.update(rms1.read());
       // Words
       int result;
       if (timerA.update(result)) {
@@ -724,7 +752,7 @@ void loop() {
   float curvedVol = normalizedVol * normalizedVol;
   // 4. Apply your max volume multiplier
   float finalGain = curvedVol;
-  amp1.gain(max(0.0f, finalGain * (1.0f - compression * 3.0f)));
+  amp1.gain(finalGain * compressor.gainMultiplier());
   //Serial.println(vol);
 
   // Actual playback
